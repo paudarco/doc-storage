@@ -1,0 +1,86 @@
+services:
+  # Сервис для PostgreSQL
+  doc_db:
+    image: postgres:17
+    container_name: ${DB_NAME}
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT}:5432"
+    networks:
+      - backend
+    healthcheck:
+      test: 
+        [
+          "CMD-SHELL", 
+          "pg_isready -U ${DB_USER} -d ${DB_NAME}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Сервис для HTTP-сервера
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${SERVER_HOST}
+    restart: always
+    volumes:
+      - ./.env:/app/.env:ro
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - DB_PORT=5432
+      - DB_HOST=doc_db
+      - REDIS_HOST=cache
+    ports:
+      - "127.0.0.1:${SERVER_PORT}:${SERVER_PORT}"
+    depends_on:
+      doc_db:
+        condition: service_healthy
+    networks:
+      - backend
+
+  cache:
+    image: redis:8.0.2
+    container_name: cache
+    restart: always
+    ports:
+      - "6379:6379"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    networks:
+      - backend
+
+  migrate:
+    image: migrate/migrate:latest
+    entrypoint: ["migrate"]
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:5432/${DB_NAME}?sslmode=${DB_SSLMODE}"
+      - "up"
+    volumes:
+      - ./migrations:/migrations:ro
+    env_file:
+      - ./.env
+    networks:
+      - backend
+    depends_on:
+      doc_db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis-data:
+
+networks:
+  backend:
+    driver: bridge
