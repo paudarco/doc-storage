@@ -62,6 +62,7 @@ var unauthErrList map[error]interface{} = map[error]interface{}{
 	ErrWrongToken:         nil,
 	ErrInvalidToken:       nil,
 	ErrTokenExpired:       nil,
+	ErrUnauthorized:       nil,
 }
 
 var forbiddenErrList map[error]interface{} = map[error]interface{}{
